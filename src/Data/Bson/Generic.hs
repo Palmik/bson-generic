@@ -9,7 +9,7 @@
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
 
-module Data.Bson.Generics
+module Data.Bson.Generic
 ( FromBSON(..)
 , ToBSON(..)
 ) where

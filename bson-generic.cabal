@@ -1,6 +1,6 @@
-Name:                bson-generics
-Version:             0.0.1
-Synopsis:            Generics functionality for BSON
+Name:                bson-generic
+Version:             0.0.2
+Synopsis:            Generic functionality for BSON
 Description:         This package offers easy conversion from and to BSON data type for most of user defined data types.
 License:             BSD3
 License-file:        LICENSE
@@ -20,7 +20,7 @@ Library
   hs-source-dirs: src
 
   Exposed-modules:
-    Data.Bson.Generics
+    Data.Bson.Generic
   
   Build-depends:
     base        >= 4 && < 5,
