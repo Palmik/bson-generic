@@ -9,13 +9,57 @@
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
 
+------------------------------------------------------------------------------
+-- | Examples
+--
+-- > data Test0 = A | B | C deriving (Generic, Typeable, Show, Eq)
+-- > instance ToBSON Test0
+-- > instance FromBSON Test0
+-- >
+-- > (fromBSON $ toBSON A) :: Maybe Test0
+--
+--
+-- > data Test1 = Test1 String String deriving (Generic, Typeable, Show, Eq)
+-- > instance ToBSON Test1
+-- > instance FromBSON Test1
+-- >
+-- > (fromBSON $ toBSON $ Test1 "aa" "bb") :: Maybe Test1
+--
+--
+-- > data Test2 = Test2 { test20 :: String, test21 :: String } deriving (Generic, Typeable, Show, Eq)
+-- > instance ToBSON Test2
+-- > instance FromBSON Test2
+-- >
+-- > (fromBSON $ toBSON $ Test2 "aa" "bb") :: Maybe Test2
+--
+--
+-- > data Test3 = Test3 { test30 :: Test2, test31 :: String } deriving (Generic, Typeable, Show, Eq)
+-- > instance ToBSON Test3
+-- > instance FromBSON Test3
+-- >
+-- > (fromBSON $ toBSON $ Test3 (Test2 "aa" "bb") "cc") :: Maybe Test3
+--
+--
+-- > data Test4 = Test4 { test4Key :: ObjectKey, test4 :: String } deriving (Generic, Typeable, Show, Eq)
+-- > instance ToBSON Test4
+-- > instance FromBSON Test4
+-- >
+-- > (fromBSON $ toBSON $ Test4 (unsafePerformIO genObjectId) "something") :: Maybe Test4
+-- > (fromBSON $ toBSON $ Test4 Nothing "something") :: Maybe Test4
+--
+--
+-- > data Comment = Comment { author :: String, comments :: [Comment] } deriving (Generic, Typeable, Show, Eq)
+-- > instance ToBSON Comment
+-- > instance FromBSON Comment
+-- >
+-- > (fromBSON $ toBSON $ Comment "Joe1" [Comment "Joe2" [], Comment "Joe3" [Comment "Joe4" []]]) :: Maybe Comment
+
 module Data.Bson.Generic
 ( ToBSON(..)
 , FromBSON(..)
 , ObjectKey(..)
 , keyLabel
 ) where
-
 
 import           GHC.Generics
 import qualified Data.Bson as BSON (lookup)

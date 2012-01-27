@@ -14,7 +14,7 @@ Cabal-version:       >= 1.6
 
 Source-repository head
   type:     git
-  location: git://github.com:Palmik/bson-generics.git
+  location: git://github.com:Palmik/bson-generic.git
 
 Library
   hs-source-dirs: src
