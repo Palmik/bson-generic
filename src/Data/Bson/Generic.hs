@@ -44,15 +44,47 @@
 -- > instance ToBSON Test4
 -- > instance FromBSON Test4
 -- >
--- > (fromBSON $ toBSON $ Test4 (unsafePerformIO genObjectId) "something") :: Maybe Test4
--- > (fromBSON $ toBSON $ Test4 Nothing "something") :: Maybe Test4
+-- > (fromBSON $ toBSON $ Test4 (ObjectKey . Just $ unsafePerformIO genObjectId) "something") :: Maybe Test4
+-- > (fromBSON $ toBSON $ Test4 (ObjectKey Nothing) "something") :: Maybe Test4
 --
 --
 -- > data Comment = Comment { author :: String, comments :: [Comment] } deriving (Generic, Typeable, Show, Eq)
 -- > instance ToBSON Comment
 -- > instance FromBSON Comment
 -- >
--- > (fromBSON $ toBSON $ Comment "Joe1" [Comment "Joe2" [], Comment "Joe3" [Comment "Joe4" []]]) :: Maybe Comment
+-- > (fromBSON $ toBSON $ Comment "Joe1" [Comment "Joe2" [], Comment "Joe3" [Comment "Joe4" [], Comment "Joe5" []]]) :: Maybe Comment
+--
+--
+-- Representation
+--
+-- > toBSON $ Test2 "aa" "bb"
+-- >
+-- > [ test20: "aa", test21: "bb" ]
+--
+-- > toBSON $ Test3 (Test2 "aa" "bb") "cc"
+-- >
+-- > [ test30: [ test20: "aa", test21: "bb"], test31: "cc" ]
+--
+-- > toBSON $ Test4 (ObjectKey . Just $ unsafePerformIO genObjectId) "something"
+-- >
+-- > [ _id: 4f226c27900faa06ab000001, test4: "something" ]
+--
+-- > toBSON $ Test4 (ObjectKey Nothing) "something"
+-- >
+-- > [ test4: "something" ]
+--
+-- > toBSON $ Comment "Joe1" [ Comment "Joe2" []
+-- >                         , Comment "Joe3" [ Comment "Joe4" []
+-- >                                          , Comment "Joe5" []
+-- >                                          ]
+-- >                         ]
+-- >
+-- > [ author: "Joe1", comments: [ [ author: "Joe2", comments: []]
+-- >                             , [ author: "Joe3", comments: [ [ author: "Joe4", comments: []]
+-- >                                                           , [ author: "Joe5", comments: []]
+-- >                                                           ]]
+-- >                             ]]
+
 
 module Data.Bson.Generic
 ( ToBSON(..)
