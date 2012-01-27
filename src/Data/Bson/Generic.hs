@@ -10,9 +10,12 @@
 {-# LANGUAGE ScopedTypeVariables    #-}
 
 module Data.Bson.Generic
-( FromBSON(..)
-, ToBSON(..)
+( ToBSON(..)
+, FromBSON(..)
+, ObjectKey(..)
+, keyLabel
 ) where
+
 
 import           GHC.Generics
 import qualified Data.Bson as BSON (lookup)
@@ -20,6 +23,15 @@ import           Data.Bson
 import           Data.UString (u)
 import           Data.Typeable
 import           Control.Monad
+
+keyLabel :: Label
+keyLabel = u "_id"
+
+------------------------------------------------------------------------------
+
+newtype ObjectKey = ObjectKey { unObjectKey :: Maybe ObjectId } deriving (Generic, Typeable, Show, Eq)
+instance FromBSON ObjectKey
+instance ToBSON ObjectKey
 
 ------------------------------------------------------------------------------
 
@@ -57,12 +69,17 @@ instance (GenericToBSON a) => GenericToBSON (D1 c a) where
     genericToBSON (M1 x) = genericToBSON x
 
 -- | Constructor tag
-instance (GenericToBSON a, Constructor c) => GenericToBSON (M1 C c a) where
-    genericToBSON c@(M1 x) = genericToBSON x ++ [ u "_constructor" =: u (conName c)]
+instance (GenericToBSON a, Constructor c) => GenericToBSON (C1 c a) where
+    genericToBSON c@(M1 x) = genericToBSON x
 
 -- | Selector tag
-instance (Val a, Selector s) => GenericToBSON (M1 S s (K1 i a)) where
+instance (Val a, Selector s) => GenericToBSON (S1 s (K1 i a)) where
     genericToBSON s@(M1 (K1 x)) = [u (selName s) =: x]
+
+-- | ObjectKey special treatment
+instance (Selector s) => GenericToBSON (S1 s (K1 i ObjectKey)) where
+    genericToBSON (M1 (K1 (ObjectKey (Just key)))) = [ keyLabel =: key ]
+    genericToBSON                                _ = []
 
 -- | Constants
 instance (ToBSON a) => GenericToBSON (K1 i a) where
@@ -95,19 +112,19 @@ instance (GenericFromBSON a, GenericFromBSON b) => GenericFromBSON (a :+: b) whe
         where left  = maybe Nothing (Just . L1) (genericFromBSON doc)
               right = maybe Nothing (Just . R1) (genericFromBSON doc)
 
-instance (GenericFromBSON a, Constructor c) => GenericFromBSON (M1 C c a) where
-    genericFromBSON doc = do
-        cname <- BSON.lookup (u "_constructor") doc
-        if (cname == (conName (undefined :: M1 C c a r)))
-           then maybe Nothing (Just . M1) (genericFromBSON doc)
-           else Nothing
+instance (GenericFromBSON a, Constructor c) => GenericFromBSON (C1 c a) where
+    genericFromBSON doc = maybe Nothing (Just . M1) (genericFromBSON doc)
 
 instance (GenericFromBSON a) => GenericFromBSON (M1 D c a) where
     genericFromBSON doc = genericFromBSON doc >>= return . M1
 
-instance (Val a, Selector s) => GenericFromBSON (M1 S s (K1 i a)) where
+instance (Val a, Selector s) => GenericFromBSON (S1 s (K1 i a)) where
     genericFromBSON doc = (BSON.lookup sname doc) >>= return . M1 . K1
-        where sname = u . selName $ (undefined :: M1 S s (K1 i a) r)
+        where sname = u . selName $ (undefined :: S1 s (K1 i a) r)
+
+-- | ObjectKey special treatment
+instance (Selector s) => GenericFromBSON (S1 s (K1 i ObjectKey)) where
+    genericFromBSON doc = Just . M1 . K1 $ ObjectKey (BSON.lookup keyLabel doc)
 
 ------------------------------------------------------------------------------
 
@@ -131,4 +148,15 @@ data Test3 = Test3 { test30 :: Test2, test31 :: String } deriving (Generic, Type
 instance ToBSON Test3
 instance FromBSON Test3
 -- (fromBSON $ toBSON $ Test3 (Test2 "aa" "bb") "cc") :: Maybe Test3
+
+data Comment = Comment { author :: String, comments :: [Comment] } deriving (Generic, Typeable, Show, Eq)
+instance ToBSON Comment
+instance FromBSON Comment
+-- (fromBSON $ toBSON $ Comment "Joe1" [Comment "Joe2" [], Comment "Joe3" [Comment "Joe4" []]]) :: Maybe Comment
+
+data Test4 = Test4 { test4Key :: ObjectKey, test4 :: String } deriving (Generic, Typeable, Show, Eq)
+instance ToBSON Test4
+instance FromBSON Test4
+-- (fromBSON $ toBSON $ Test4 (unsafePerformIO genObjectId) "something") :: Maybe Test4
+-- (fromBSON $ toBSON $ Test4 Nothing "something") :: Maybe Test4
 -}
