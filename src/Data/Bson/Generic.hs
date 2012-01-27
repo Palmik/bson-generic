@@ -103,6 +103,49 @@ import           Control.Monad
 keyLabel :: Label
 keyLabel = u "_id"
 
+constructorLabel :: Label
+constructorLabel = u "_co"
+
+class GConstructorNames f where
+    gconstructorNames :: f a -> [String]
+
+instance GConstructorNames V1 where
+    gconstructorNames _ = []
+
+instance (GConstructorNames a) => GConstructorNames (D1 d a) where
+    gconstructorNames (M1 x) = gconstructorNames x
+
+instance (Constructor c) => GConstructorNames (C1 c a) where
+    gconstructorNames c = [conName c]
+
+instance (GConstructorNames a, GConstructorNames b) => GConstructorNames (a :+: b) where
+    gconstructorNames (_ :: (a :+: b) r) = gconstructorNames (undefined :: a r) ++
+                                           gconstructorNames (undefined :: b r)
+
+
+constructorNames :: (Generic a, GConstructorNames (Rep a)) => a -> [String]
+constructorNames x = gconstructorNames $ from x
+
+class GConstructorCount f where
+    gconstructorCount :: f a -> Int
+
+instance GConstructorCount V1 where
+    gconstructorCount _ = 0
+
+instance (GConstructorCount a) => GConstructorCount (D1 d a) where
+    gconstructorCount (M1 x) = gconstructorCount x
+
+instance (Constructor c) => GConstructorCount (C1 c a) where
+    gconstructorCount c = 1
+
+instance (GConstructorCount a, GConstructorCount b) => GConstructorCount (a :+: b) where
+    gconstructorCount (_ :: (a :+: b) r) = gconstructorCount (undefined :: a r) +
+                                           gconstructorCount (undefined :: b r)
+
+constructorCount :: (Generic a, GConstructorCount (Rep a)) => a -> Int
+constructorCount x = gconstructorCount $ from x
+
+
 ------------------------------------------------------------------------------
 
 newtype ObjectKey = ObjectKey { unObjectKey :: Maybe ObjectId } deriving (Generic, Typeable, Show, Eq)
@@ -121,45 +164,47 @@ instance (FromBSON a, ToBSON a, Typeable a, Show a, Eq a) => Val a where
 class ToBSON a where
     toBSON :: a -> Document
 
-    default toBSON :: (Generic a, GenericToBSON (Rep a)) => a -> Document
-    toBSON a = genericToBSON (from a)
+    default toBSON :: (Generic a, GConstructorCount (Rep a), GenericToBSON (Rep a)) => a -> Document
+    toBSON a = genericToBSON (constructorCount a) (from a)
 
 class GenericToBSON f where
-    genericToBSON :: f a -> Document
+    genericToBSON :: Int -> f a -> Document
 
 -- | Unit type -> Empty document
 instance GenericToBSON U1 where
-    genericToBSON U1 = []
+    genericToBSON _ U1 = []
 
 -- | Sum of types
 instance (GenericToBSON a, GenericToBSON b) => GenericToBSON (a :*: b) where
-    genericToBSON (x :*: y) = genericToBSON x ++ genericToBSON y
+    genericToBSON n (x :*: y) = genericToBSON n x ++ genericToBSON n y
 
 -- | Product of types
 instance (GenericToBSON a, GenericToBSON b) => GenericToBSON (a :+: b) where
-    genericToBSON (L1 x) = genericToBSON x
-    genericToBSON (R1 x) = genericToBSON x
+    genericToBSON n (L1 x) = genericToBSON n x
+    genericToBSON n (R1 x) = genericToBSON n x
 
 -- | Datatype information tag
 instance (GenericToBSON a) => GenericToBSON (D1 c a) where
-    genericToBSON (M1 x) = genericToBSON x
+    genericToBSON n (M1 x) = genericToBSON n x
 
 -- | Constructor tag
 instance (GenericToBSON a, Constructor c) => GenericToBSON (C1 c a) where
-    genericToBSON c@(M1 x) = genericToBSON x
+    genericToBSON 0 (M1 x) = genericToBSON 0 x
+    genericToBSON 1 (M1 x) = genericToBSON 1 x
+    genericToBSON n c@(M1 x) = genericToBSON n x ++ [ constructorLabel =: conName c ]
 
 -- | Selector tag
 instance (Val a, Selector s) => GenericToBSON (S1 s (K1 i a)) where
-    genericToBSON s@(M1 (K1 x)) = [u (selName s) =: x]
+    genericToBSON _ s@(M1 (K1 x)) = [u (selName s) =: x]
 
 -- | ObjectKey special treatment
 instance (Selector s) => GenericToBSON (S1 s (K1 i ObjectKey)) where
-    genericToBSON (M1 (K1 (ObjectKey (Just key)))) = [ keyLabel =: key ]
-    genericToBSON                                _ = []
+    genericToBSON _ (M1 (K1 (ObjectKey (Just key)))) = [ keyLabel =: key ]
+    genericToBSON                              _ _ = []
 
 -- | Constants
 instance (ToBSON a) => GenericToBSON (K1 i a) where
-    genericToBSON (K1 x) = toBSON x
+    genericToBSON _ (K1 x) = toBSON x
 
 ------------------------------------------------------------------------------
 
@@ -168,38 +213,44 @@ instance (ToBSON a) => GenericToBSON (K1 i a) where
 class FromBSON a where
     fromBSON :: Document -> Maybe a
 
-    default fromBSON :: (Generic a, GenericFromBSON (Rep a)) => Document -> Maybe a
-    fromBSON doc = maybe Nothing (Just . to) (genericFromBSON doc)
+    default fromBSON :: (Generic a, GConstructorCount (Rep a), GenericFromBSON (Rep a)) => Document -> Maybe a
+    fromBSON doc = maybe Nothing (Just . to) (genericFromBSON (constructorCount (undefined :: a)) doc)
 
 class GenericFromBSON f where
-    genericFromBSON :: Document -> Maybe (f a)
+    genericFromBSON :: Int -> Document -> Maybe (f a)
 
 instance GenericFromBSON U1 where
-    genericFromBSON doc = Just U1
+    genericFromBSON _ doc = Just U1
 
 instance (GenericFromBSON a, GenericFromBSON b) => GenericFromBSON (a :*: b) where
-    genericFromBSON doc = do
-        x <- (genericFromBSON doc)
-        y <- (genericFromBSON doc)
+    genericFromBSON n doc = do
+        x <- (genericFromBSON n doc)
+        y <- (genericFromBSON n doc)
         return (x :*: y)
 
 instance (GenericFromBSON a, GenericFromBSON b) => GenericFromBSON (a :+: b) where
-    genericFromBSON doc = left `mplus` right
-        where left  = maybe Nothing (Just . L1) (genericFromBSON doc)
-              right = maybe Nothing (Just . R1) (genericFromBSON doc)
+    genericFromBSON n doc = left `mplus` right
+        where left  = maybe Nothing (Just . L1) (genericFromBSON n doc)
+              right = maybe Nothing (Just . R1) (genericFromBSON n doc)
 
 instance (GenericFromBSON a, Constructor c) => GenericFromBSON (C1 c a) where
-    genericFromBSON doc = maybe Nothing (Just . M1) (genericFromBSON doc)
+    genericFromBSON 0 doc = maybe Nothing (Just . M1) (genericFromBSON 0 doc)
+    genericFromBSON 1 doc = maybe Nothing (Just . M1) (genericFromBSON 0 doc)
+    genericFromBSON n doc = do
+        cname <- BSON.lookup constructorLabel doc
+        if (cname == (conName (undefined :: M1 C c a r)))
+           then maybe Nothing (Just . M1) (genericFromBSON n doc)
+           else Nothing
 
 instance (GenericFromBSON a) => GenericFromBSON (M1 D c a) where
-    genericFromBSON doc = genericFromBSON doc >>= return . M1
+    genericFromBSON n doc = genericFromBSON n doc >>= return . M1
 
 instance (Val a, Selector s) => GenericFromBSON (S1 s (K1 i a)) where
-    genericFromBSON doc = (BSON.lookup sname doc) >>= return . M1 . K1
+    genericFromBSON n doc = (BSON.lookup sname doc) >>= return . M1 . K1
         where sname = u . selName $ (undefined :: S1 s (K1 i a) r)
 
 -- | ObjectKey special treatment
 instance (Selector s) => GenericFromBSON (S1 s (K1 i ObjectKey)) where
-    genericFromBSON doc = Just . M1 . K1 $ ObjectKey (BSON.lookup keyLabel doc)
+    genericFromBSON n doc = Just . M1 . K1 $ ObjectKey (BSON.lookup keyLabel doc)
 
 ------------------------------------------------------------------------------
