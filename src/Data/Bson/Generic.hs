@@ -8,6 +8,7 @@
 {-# LANGUAGE DeriveDataTypeable     #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE OverlappingInstances   #-}
 
 ------------------------------------------------------------------------------
 -- | Examples
