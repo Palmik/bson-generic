@@ -1,5 +1,5 @@
 Name:                bson-generic
-Version:             0.0.5
+Version:             0.0.5.1
 Synopsis:            Generic functionality for BSON
 Description:         This package offers easy conversion from and to BSON data type for most of user defined data types.
 License:             BSD3
