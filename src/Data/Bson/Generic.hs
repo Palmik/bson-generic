@@ -98,15 +98,16 @@ module Data.Bson.Generic
 import           GHC.Generics
 import qualified Data.Bson as BSON (lookup)
 import           Data.Bson
-import           Data.UString (u)
+--import           Data.UString (u)
+import           Data.Text (pack)
 import           Data.Typeable
 import           Control.Monad
 
 keyLabel :: Label
-keyLabel = u "_id"
+keyLabel = pack "_id"
 
 constructorLabel :: Label
-constructorLabel = u "_co"
+constructorLabel = pack "_co"
 
 class GConstructorCount f where
     gconstructorCount :: f a -> Int
@@ -177,7 +178,7 @@ instance (GToBSON a, Constructor c) => GToBSON (C1 c a) where
 
 -- | Selector tag
 instance (Val a, Selector s) => GToBSON (S1 s (K1 i a)) where
-    genericToBSON _ s@(M1 (K1 x)) = [u (selName s) =: x]
+    genericToBSON _ s@(M1 (K1 x)) = [pack (selName s) =: x]
 
 -- | ObjectKey special treatment
 instance (Selector s) => GToBSON (S1 s (K1 i ObjectKey)) where
@@ -229,7 +230,7 @@ instance (GFromBSON a) => GFromBSON (M1 D c a) where
 
 instance (Val a, Selector s) => GFromBSON (S1 s (K1 i a)) where
     genericFromBSON n doc = (BSON.lookup sname doc) >>= return . M1 . K1
-        where sname = u . selName $ (undefined :: S1 s (K1 i a) r)
+        where sname = pack . selName $ (undefined :: S1 s (K1 i a) r)
 
 -- | ObjectKey special treatment
 instance (Selector s) => GFromBSON (S1 s (K1 i ObjectKey)) where
