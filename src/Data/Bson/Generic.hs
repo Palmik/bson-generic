@@ -95,39 +95,23 @@ module Data.Bson.Generic
 , constructorLabel
 ) where
 
+------------------------------------------------------------------------------
 import           GHC.Generics
-import qualified Data.Bson as BSON (lookup)
-import           Data.Bson
---import           Data.UString (u)
-import           Data.Text (pack)
-import           Data.Typeable
+------------------------------------------------------------------------------
+import           Control.Applicative
 import           Control.Monad
+------------------------------------------------------------------------------
+import qualified Data.Bson     as BSON (lookup)
+import           Data.Bson
+import qualified Data.Text     as TS   (pack)
+import           Data.Typeable
+------------------------------------------------------------------------------
 
 keyLabel :: Label
-keyLabel = pack "_id"
+keyLabel = TS.pack "_id"
 
 constructorLabel :: Label
-constructorLabel = pack "_co"
-
-class GConstructorCount f where
-    gconstructorCount :: f a -> Int
-
-instance GConstructorCount V1 where
-    gconstructorCount _ = 0
-
-instance (GConstructorCount a) => GConstructorCount (D1 d a) where
-    gconstructorCount (M1 x) = gconstructorCount x
-
-instance (Constructor c) => GConstructorCount (C1 c a) where
-    gconstructorCount c = 1
-
-instance (GConstructorCount a, GConstructorCount b) => GConstructorCount (a :+: b) where
-    gconstructorCount (_ :: (a :+: b) r) = gconstructorCount (undefined :: a r) +
-                                           gconstructorCount (undefined :: b r)
-
-constructorCount :: (Generic a, GConstructorCount (Rep a)) => a -> Int
-constructorCount x = gconstructorCount $ from x
-
+constructorLabel = TS.pack "_co"
 
 ------------------------------------------------------------------------------
 
@@ -143,6 +127,7 @@ instance (FromBSON a, ToBSON a, Typeable a, Show a, Eq a) => Val a where
     cast' _       = Nothing
 
 ------------------------------------------------------------------------------
+-- TO BSON
 
 class ToBSON a where
     toBSON :: a -> Document
@@ -178,7 +163,7 @@ instance (GToBSON a, Constructor c) => GToBSON (C1 c a) where
 
 -- | Selector tag
 instance (Val a, Selector s) => GToBSON (S1 s (K1 i a)) where
-    genericToBSON _ s@(M1 (K1 x)) = [pack (selName s) =: x]
+    genericToBSON _ s@(M1 (K1 x)) = [TS.pack (selName s) =: x]
 
 -- | ObjectKey special treatment
 instance (Selector s) => GToBSON (S1 s (K1 i ObjectKey)) where
@@ -192,6 +177,7 @@ instance (ToBSON a) => GToBSON (K1 i a) where
 ------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
+-- FROM BSON
 
 class FromBSON a where
     fromBSON :: Document -> Maybe a
@@ -203,37 +189,59 @@ class GFromBSON f where
     genericFromBSON :: Int -> Document -> Maybe (f a)
 
 instance GFromBSON U1 where
-    genericFromBSON _ doc = Just U1
+    genericFromBSON _ _ = Just U1
 
 instance (GFromBSON a, GFromBSON b) => GFromBSON (a :*: b) where
     genericFromBSON n doc = do
-        x <- (genericFromBSON n doc)
-        y <- (genericFromBSON n doc)
-        return (x :*: y)
+        x <- genericFromBSON n doc
+        y <- genericFromBSON n doc
+        return $ x :*: y
 
 instance (GFromBSON a, GFromBSON b) => GFromBSON (a :+: b) where
     genericFromBSON n doc = left `mplus` right
-        where left  = maybe Nothing (Just . L1) (genericFromBSON n doc)
-              right = maybe Nothing (Just . R1) (genericFromBSON n doc)
+        where
+          left  = L1 <$> genericFromBSON n doc
+          right = R1 <$> genericFromBSON n doc
 
 instance (GFromBSON a, Constructor c) => GFromBSON (C1 c a) where
-    genericFromBSON 0 doc = maybe Nothing (Just . M1) (genericFromBSON 0 doc)
-    genericFromBSON 1 doc = maybe Nothing (Just . M1) (genericFromBSON 0 doc)
+    genericFromBSON 0 doc = M1 <$> genericFromBSON 0 doc
+    genericFromBSON 1 doc = M1 <$> genericFromBSON 0 doc
     genericFromBSON n doc = do
         cname <- BSON.lookup constructorLabel doc
-        if (cname == (conName (undefined :: M1 C c a r)))
-           then maybe Nothing (Just . M1) (genericFromBSON n doc)
+        if cname == conName (undefined :: M1 C c a r)
+           then M1 <$> genericFromBSON n doc
            else Nothing
 
 instance (GFromBSON a) => GFromBSON (M1 D c a) where
-    genericFromBSON n doc = genericFromBSON n doc >>= return . M1
+    genericFromBSON n doc = M1 <$> genericFromBSON n doc
 
 instance (Val a, Selector s) => GFromBSON (S1 s (K1 i a)) where
-    genericFromBSON n doc = (BSON.lookup sname doc) >>= return . M1 . K1
-        where sname = pack . selName $ (undefined :: S1 s (K1 i a) r)
+    genericFromBSON _ doc = M1 . K1 <$> BSON.lookup sname doc
+        where
+          sname = TS.pack . selName $ (undefined :: S1 s (K1 i a) r)
 
 -- | ObjectKey special treatment
 instance (Selector s) => GFromBSON (S1 s (K1 i ObjectKey)) where
-    genericFromBSON n doc = Just . M1 . K1 $ ObjectKey (BSON.lookup keyLabel doc)
+    genericFromBSON _ doc = Just . M1 . K1 $ ObjectKey (BSON.lookup keyLabel doc)
 
 ------------------------------------------------------------------------------
+-- CONVENIENCE
+
+class GConstructorCount f where
+    gconstructorCount :: f a -> Int
+
+instance GConstructorCount V1 where
+    gconstructorCount _ = 0
+
+instance (GConstructorCount a) => GConstructorCount (D1 d a) where
+    gconstructorCount (M1 x) = gconstructorCount x
+
+instance (Constructor c) => GConstructorCount (C1 c a) where
+    gconstructorCount _ = 1
+
+instance (GConstructorCount a, GConstructorCount b) => GConstructorCount (a :+: b) where
+    gconstructorCount (_ :: (a :+: b) r) = gconstructorCount (undefined :: a r) +
+                                           gconstructorCount (undefined :: b r)
+
+constructorCount :: (Generic a, GConstructorCount (Rep a)) => a -> Int
+constructorCount x = gconstructorCount $ from x
