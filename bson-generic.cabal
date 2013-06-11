@@ -1,5 +1,5 @@
 name:                bson-generic
-version:             0.0.7
+version:             0.0.8
 synopsis:            Generic functionality for BSON
 description:         This package offers easy conversion from and to BSON data type for most of user defined data types.
                      The interface may change at will.
@@ -19,9 +19,9 @@ library
       Data.Bson.Generic
 
   build-depends:
-      base     == 4.5.*
+      base     == 4.6.*
     , bson     == 0.2.*
-    , ghc-prim == 0.2.*
+    , ghc-prim == 0.3.*
     , text     == 0.11.*
 
   ghc-options: -O2
