@@ -19,10 +19,10 @@ library
       Data.Bson.Generic
 
   build-depends:
-      base     == 4.6.*
-    , bson     == 0.2.*
-    , ghc-prim == 0.3.*
-    , text     == 0.11.*
+      base     == 4.8.*
+    , bson     == 0.3.*
+    , ghc-prim == 0.4.*
+    , text     == 1.2.1.*
 
   ghc-options: -O2
 
